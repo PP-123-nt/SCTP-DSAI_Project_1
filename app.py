@@ -238,7 +238,55 @@ st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df
 st.dataframe(entry_df, use_container_width=True)
 
 
+## PHASE 2: SECTOR DEMAND & SALARY ANALYSIS
+import math
 import plotly.express as px
+
+SHORT = {"Banking and Finance": "Banking & Finance", "Building and Construction": "Building & Constr.",
+         "Education and Training": "Education", "Information Technology": "IT",
+         "Accounting / Auditing / Taxation": "Accounting", "Admin / Secretarial": "Admin",
+         "Customer Service": "Customer service", "Sales / Retail": "Sales/Retail", "Human Resources": "HR",
+         "Advertising / Media": "Advertising", "Healthcare / Pharmaceutical": "Healthcare"}
+ORANGE, TEAL = "#e76f51", "#2a9d8f"
+BETTER = "Better odds: fewer applicants and higher pay than the median of the sectors shown"
+
+
+def bubble_figure(s):
+    """s = top sectors with columns: sector, postings, median_salary, applicants_per_job"""
+    s = s.copy()
+    mx, my = s["applicants_per_job"].median(), s["median_salary"].median()
+    s["group"] = ((s["applicants_per_job"] <= mx) & (s["median_salary"] >= my)).map({True: BETTER, False: "Other sector"})
+    s["label"] = s["sector"].map(lambda n: SHORT.get(n, n))
+    xmax = max(1, math.ceil(s["applicants_per_job"].max() * 1.25 * 2) / 2)
+    ymin = math.floor((s["median_salary"].min() - 250) / 250) * 250
+    ymax = math.ceil((s["median_salary"].max() + 250) / 250) * 250
+
+    fig = px.scatter(s, x="applicants_per_job", y="median_salary", size="postings", text="label", color="group",
+                     custom_data=["sector", "postings"], size_max=40,
+                     color_discrete_map={BETTER: ORANGE, "Other sector": TEAL},
+                     category_orders={"group": [BETTER, "Other sector"]})
+    for t in fig.data:
+        better = t.name == BETTER
+        t.update(marker=dict(opacity=0.85 if better else 0.5, line=dict(width=1.5, color=ORANGE if better else TEAL)),
+                 textposition=["middle left" if x > 0.85 * xmax else "middle right" for x in t.x],
+                 textfont=dict(size=11),
+                 hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:,} postings<br>"
+                               "Median cleaned salary S$%{y:,.0f} a month<br>"
+                               "%{x:.2f} applicants per job<extra></extra>")
+
+    fig.add_shape(type="rect", x0=0, x1=mx, y0=my, y1=ymax, fillcolor="rgba(42,157,143,0.10)", line_width=0, layer="below")
+    fig.add_vline(x=mx, line_dash="dash", line_color="grey", line_width=1)
+    fig.add_hline(y=my, line_dash="dash", line_color="grey", line_width=1)
+    fig.add_annotation(x=0.02 * xmax, y=ymax, text="Better odds: fewer applicants, higher pay", showarrow=False,
+                       xanchor="left", yanchor="top", font=dict(size=12))
+    grid = "rgba(128,128,128,0.15)"
+    fig.update_xaxes(range=[0, xmax], gridcolor=grid, zeroline=False,
+                     title="Applicants per job (total applications ÷ postings; fewer = easier to get hired)")
+    fig.update_yaxes(range=[ymin, ymax], gridcolor=grid, zeroline=False, tickprefix="S$", tickformat=",",
+                     title="Median average salary, cleaned (S$ a month)")
+    fig.update_layout(height=520, margin=dict(l=0, r=0, t=50, b=0),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, title_text=""))
+    return fig
 
 @st.cache_data
 def add_sector_and_clean(d):
@@ -255,7 +303,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 
 ## Bubble chart for top 10 sectors by cleaned median average salary
 
-st.subheader("Top 10 Sectors by Median Average salary")
+st.subheader("Top 10 sectors by cleaned median average salary")
 chart_emp = st.multiselect("Employment type (this chart only)",
                            sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
@@ -271,10 +319,22 @@ s = s[s["postings"] > 1000].sort_values(["median_salary", "postings"], ascending
 if len(s) < 3:
     st.info(f"Only {len(s)} sector(s) have more than 1,000 postings for this selection, too few to compare.")
 else:
-    fig = px.scatter(s, x="applicants_per_job", y="median_salary", size="postings", text="sector", size_max=45,
-                     labels={"applicants_per_job": "Applicants per job (fewer = easier to get hired)",
-                             "median_salary": "Median average salary, cleaned (S$ a month)", "postings": "Postings"})
-    fig.add_vline(x=s["applicants_per_job"].median(), line_dash="dot")
-    fig.add_hline(y=s["median_salary"].median(), line_dash="dot")
-    fig.update_traces(textposition="top center")
-    st.plotly_chart(fig, width="stretch")
+    st.caption(f"{len(c):,} postings in this filter. "
+               + ("Showing the top 10 of the sectors with more than 1,000 postings, ranked by cleaned median salary."
+                  if len(s) == 10 else f"Only {len(s)} sectors have more than 1,000 postings."))
+    st.plotly_chart(bubble_figure(s), width="stretch")
+
+    mx, my = s["applicants_per_job"].median(), s["median_salary"].median()
+    better = s[(s["applicants_per_job"] <= mx) & (s["median_salary"] >= my)]
+    top_pay = s.iloc[s["median_salary"].argmax()]
+    crowded = s.iloc[s["applicants_per_job"].argmax()]
+    st.info(
+        f"📌 **Key Finding (Pay vs Competition):** "
+        f"Among these {len(s)} sectors, **{top_pay['sector']}** pays the most "
+        f"(S${top_pay['median_salary']:,.0f} a month, {top_pay['applicants_per_job']:.2f} applicants per job). "
+        f"**Better odds** (fewer applicants and higher pay than the median of the sectors shown): "
+        f"**{', '.join(better['sector']) if len(better) else 'none in this selection'}**. "
+        f"The most crowded is **{crowded['sector']}** with {crowded['applicants_per_job']:.2f} applicants per job."
+    )
+    st.caption("Pay is the cleaned average of each posting's advertised minimum and maximum. Applicants per job "
+               "includes open postings, so use it to compare sectors rather than as an absolute figure.")
