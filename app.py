@@ -236,3 +236,45 @@ st.markdown("---")
 st.header("Filtered Results Data View (Entry-Level Focus)")
 st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
 st.dataframe(entry_df, use_container_width=True)
+
+
+import plotly.express as px
+
+@st.cache_data
+def add_sector_and_clean(d):
+    d = d.copy()
+    d["sector"] = d["categories"].map(
+        lambda s: json.loads(s)[0]["category"] if isinstance(s, str) and s != "[]" else "Unknown")
+    g = d.groupby("sector")["average_salary"]
+    lo, hi, med = g.transform(lambda s: s.quantile(0.01)), g.transform(lambda s: s.quantile(0.99)), g.transform("median")
+    d["average_salary_clean"] = d["average_salary"].where(d["average_salary"].between(lo, hi), med)
+    return d
+
+# bubble chart base = Fresh/entry level only (the loader no longer filters position level)
+entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"])
+
+## Bubble chart for top 10 sectors by cleaned median average salary
+
+st.subheader("Top 10 Sectors by Median Average salary")
+chart_emp = st.multiselect("Employment type (this chart only)",
+                           sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
+c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
+
+s = (c.groupby("sector")
+       .agg(postings=("metadata_jobPostId", "count"),
+            median_salary=("average_salary_clean", "median"),
+            applications=("metadata_totalNumberJobApplication", "sum"))
+       .reset_index())
+s["applicants_per_job"] = s["applications"] / s["postings"]
+s = s[s["postings"] > 1000].sort_values(["median_salary", "postings"], ascending=False).head(10)
+
+if len(s) < 3:
+    st.info(f"Only {len(s)} sector(s) have more than 1,000 postings for this selection, too few to compare.")
+else:
+    fig = px.scatter(s, x="applicants_per_job", y="median_salary", size="postings", text="sector", size_max=45,
+                     labels={"applicants_per_job": "Applicants per job (fewer = easier to get hired)",
+                             "median_salary": "Median average salary, cleaned (S$ a month)", "postings": "Postings"})
+    fig.add_vline(x=s["applicants_per_job"].median(), line_dash="dot")
+    fig.add_hline(y=s["median_salary"].median(), line_dash="dot")
+    fig.update_traces(textposition="top center")
+    st.plotly_chart(fig, width="stretch")
