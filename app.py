@@ -248,7 +248,7 @@ SHORT = {"Banking and Finance": "Banking & Finance", "Building and Construction"
          "Customer Service": "Customer service", "Sales / Retail": "Sales/Retail", "Human Resources": "HR",
          "Advertising / Media": "Advertising", "Healthcare / Pharmaceutical": "Healthcare"}
 ORANGE, TEAL = "#e76f51", "#2a9d8f"
-BETTER = "Better odds: fewer applicants and higher pay than the median of the sectors shown"
+BETTER = "Smaller Talent Pool: higher pay with fewer applicants than the median of the sectors shown"
 
 
 def bubble_figure(s):
@@ -271,19 +271,19 @@ def bubble_figure(s):
                  textposition=["middle left" if x > 0.85 * xmax else "middle right" for x in t.x],
                  textfont=dict(size=11),
                  hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:,} postings<br>"
-                               "Median cleaned salary S$%{y:,.0f} a month<br>"
+                               "Median salary S$%{y:,.0f} a month<br>"
                                "%{x:.2f} applicants per job<extra></extra>")
 
     fig.add_shape(type="rect", x0=0, x1=mx, y0=my, y1=ymax, fillcolor="rgba(42,157,143,0.10)", line_width=0, layer="below")
     fig.add_vline(x=mx, line_dash="dash", line_color="grey", line_width=1)
     fig.add_hline(y=my, line_dash="dash", line_color="grey", line_width=1)
-    fig.add_annotation(x=0.02 * xmax, y=ymax, text="Better odds: fewer applicants, higher pay", showarrow=False,
+    fig.add_annotation(x=0.02 * xmax, y=ymax, text="Fewer applicants with higher pay", showarrow=False,
                        xanchor="left", yanchor="top", font=dict(size=12))
     grid = "rgba(128,128,128,0.15)"
     fig.update_xaxes(range=[0, xmax], gridcolor=grid, zeroline=False,
-                     title="Applicants per job (total applications ÷ postings; fewer = easier to get hired)")
+                     title="Applicants per Job (total applications ÷ postings)")
     fig.update_yaxes(range=[ymin, ymax], gridcolor=grid, zeroline=False, tickprefix="S$", tickformat=",",
-                     title="Median average salary, cleaned (S$ a month)")
+                     title="Median Average Salary (S$ per month)")
     fig.update_layout(height=520, margin=dict(l=0, r=0, t=50, b=0),
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, title_text=""))
     return fig
@@ -304,7 +304,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 ## Bubble chart for top 10 sectors by cleaned median average salary
 
 st.subheader("Top 10 Sectors by Median Average Salary")
-chart_emp = st.multiselect("Employment type (this chart only)",
+chart_emp = st.multiselect("Employment Type (this chart only)",
                            sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
 
@@ -320,7 +320,7 @@ if len(s) < 3:
     st.info(f"Only {len(s)} sector(s) have more than 1,000 postings for this selection, too few to compare.")
 else:
     st.caption(f"{len(c):,} postings in this filter. "
-               + ("Showing the top 10 of the sectors with more than 1,000 postings, ranked by cleaned median salary."
+               + ("Showing the top 10 sectors with > 1,000 postings ranked by median salary."
                   if len(s) == 10 else f"Only {len(s)} sectors have more than 1,000 postings."))
     st.plotly_chart(bubble_figure(s), width="stretch")
 
@@ -332,9 +332,8 @@ else:
         f"📌 **Key Finding (Pay vs Competition):** "
         f"Among these {len(s)} sectors, **{top_pay['sector']}** pays the most "
         f"(S${top_pay['median_salary']:,.0f} a month, {top_pay['applicants_per_job']:.2f} applicants per job). "
-        f"**Better odds** (fewer applicants and higher pay than the median of the sectors shown): "
+        f"**Limited Talent Pool** (fewer applicants and higher pay than the median of the sectors shown): "
         f"**{', '.join(better['sector']) if len(better) else 'none in this selection'}**. "
         f"The most crowded is **{crowded['sector']}** with {crowded['applicants_per_job']:.2f} applicants per job."
     )
-    st.caption("Pay is the cleaned average of each posting's advertised minimum and maximum. Applicants per job "
-               "includes open postings, so use it to compare sectors rather than as an absolute figure.")
+    st.caption("Median average salary is calculated after removing outliers (top and bottom 1% of salaries for each sector). ")
