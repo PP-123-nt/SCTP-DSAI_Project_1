@@ -237,8 +237,10 @@ st.header("Filtered Results Data View (Entry-Level Focus)")
 st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
 st.dataframe(entry_df, use_container_width=True)
 
-
+################################################### 
 ## PHASE 2: SECTOR DEMAND & SALARY ANALYSIS
+################################################### 
+
 import math
 import plotly.express as px
 
