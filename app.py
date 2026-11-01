@@ -62,7 +62,7 @@ def load_data(path):
     #     stats = category_stats.reindex(categories)
 
     #     is_outlier = (
-    #         ((salary - stats["mean"]).abs() > 3 * stats["std"]) | (salary - stats["mean"]).abs() < 3 * stats["std"]
+    #         (salary > stats["mean"] + 3 * stats["std"]) | (salary < stats["mean"] - 3 * stats["std"])
     #     ).fillna(False).any()
 
     #     if is_outlier:
