@@ -74,7 +74,7 @@ def load_data(path):
 
     # df["average_salary"] = df.apply(replace_salary, axis=1)
 
-    # return df
+    return df
 
 df = load_data(DATA_PATH)
 
