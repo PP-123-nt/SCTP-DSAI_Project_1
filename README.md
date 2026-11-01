@@ -11,7 +11,7 @@
     - there are 43 unique sectors ("categories" column); compute median *average_salary* for each sector
     - for each sector, identify outlier *average_salary* (exceed mean +/- 3 std) and replace with corresponding median
     - for postings in multiple sectors, replace with average of the medians for those sectors
-    - **NOTE**: currently commented out (ln 34-77) because it adds 2 mins to loading time
+    - **NOTE**: currently commented out (ln 34-76) because it adds 2 mins to loading time
     - **NOTE 2**: I would suggest that, if you want to do things with salary, only use *average_salary* and not *salary_minimum* or *salary_maximum* (less reliable)
 
 ### 2. Dashboard
