@@ -303,7 +303,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 
 ## Bubble chart for top 10 sectors by cleaned median average salary
 
-st.subheader("Top 10 sectors by cleaned median average salary")
+st.subheader("Top 10 Sectors by Median Average Salary")
 chart_emp = st.multiselect("Employment type (this chart only)",
                            sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
