@@ -101,10 +101,10 @@ if selected_sectors:
     filtered_df = filtered_df[filtered_df["categories"].apply(
     lambda categories: any(value in categories for value in selected_sectors))]
 
-# st.header("Filtered Results")
-# st.write(
-#     f"Matching rows: {len(filtered_df):,} | Columns: {len(filtered_df.columns)}")
-# st.dataframe(filtered_df)
+st.header("Filtered Results")
+st.write(
+    f"Matching rows: {len(filtered_df):,} | Columns: {len(filtered_df.columns)}")
+st.dataframe(filtered_df)
 
 ###################################################
 ## ADD REST OF YOUR CODE HERE VVVVVVVV
