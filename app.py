@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import json
+import altair as alt
 
 st.set_page_config(page_title="Sector Demand for Entry Level Workers", layout="wide")
 
@@ -24,7 +25,7 @@ def load_data(path):
     df['positionLevels'] = df['positionLevels'].astype('category')
 
     # filters
-    df = df[df['positionLevels']=='Fresh/entry level'] 
+    # df = df[df['positionLevels']=='Fresh/entry level'] 
     df = df[df['metadata_newPostingDate']>= '2023-05']
 
     # replaces outlier 'average salary' values with the median for that sector ("category")
@@ -74,7 +75,7 @@ def load_data(path):
 
     # df["average_salary"] = df.apply(replace_salary, axis=1)
 
-    # return df
+    return df
 
 df = load_data(DATA_PATH)
 
@@ -88,24 +89,150 @@ st.title("Sector Demand for Entry Level Workers")
 ## FILTER SIDEBAR AND DATA FILTERED BY SECTOR
 # 
 st.sidebar.header("Filters")
-# get sectors
-unique_sectors = pd.json_normalize(df["categories"].dropna().map(json.loads).explode()).drop_duplicates().sort_values('id')
-unique_sectors = unique_sectors["category"]
 
-#FILTER WIDGETS
+def extract_categories(categories_str):
+    if pd.isna(categories_str) or not isinstance(categories_str, str):
+        return []
+    try:
+        items = json.loads(categories_str)
+        if isinstance(items, list):
+            return [item.get("category") for item in items if isinstance(item, dict) and "category" in item]
+    except:
+        pass
+    return []
+
+# Robust extraction for unique sectors in sidebar
+parsed_categories = []
+for cat_str in df["categories"].dropna():
+    res = extract_categories(cat_str)
+    if res:
+        parsed_categories.extend(res)
+
+unique_sectors = sorted(list(set(parsed_categories)))
+
 selected_sectors = st.sidebar.multiselect("Sector", unique_sectors, default=[])
 
+# Filtered DataFrame containing ALL position levels
 filtered_df = df.copy()
 
 if selected_sectors:
     filtered_df = filtered_df[filtered_df["categories"].apply(
-    lambda categories: any(value in categories for value in selected_sectors))]
+        lambda x: any(sec in extract_categories(x) for sec in selected_sectors)
+    )]
 
-st.header("Filtered Results")
-st.write(
-    f"Matching rows: {len(filtered_df):,} | Columns: {len(filtered_df.columns)}")
-st.dataframe(filtered_df)
+# Dedicated subset for entry-level specific metrics & status chart
+entry_df = filtered_df[filtered_df['positionLevels'] == 'Fresh/entry level']
+
 
 ###################################################
-## ADD REST OF YOUR CODE HERE VVVVVVVV
+## PHASE 1: MACRO ECONOMIC CLIMATE
+###################################################
+
+st.markdown("---")
+st.header("Phase 1: Macro Economic Climate (Entry-Level Overview)")
+
+if not filtered_df.empty:
+    
+    # Calculate overall average percentage of entry level jobs
+    total_jobs_count = len(filtered_df)
+    entry_jobs_count = len(entry_df)
+    avg_entry_pct = (entry_jobs_count / total_jobs_count * 100) if total_jobs_count > 0 else 0.0
+
+    # Quick Summary Metrics (Strictly Entry-Level)
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.metric("Total Entry-Level Postings", f"{entry_jobs_count:,}")
+    with col_m2:
+        total_apps = entry_df['metadata_totalNumberJobApplication'].sum() if 'metadata_totalNumberJobApplication' in entry_df.columns else 0
+        st.metric("Total Entry-Level Applications", f"{int(total_apps):,}")
+    with col_m3:
+        unique_companies = entry_df['postedCompany_name'].nunique() if 'postedCompany_name' in entry_df.columns else 0
+        st.metric("Hiring Companies (Entry-Level)", f"{unique_companies:,}")
+
+    st.markdown("---")
+
+    # --- ROW 1: SEGMENTED HISTOGRAM & JOB STATUS PIE CHART BESIDE IT ---
+    row1_col1, row1_col2 = st.columns(2)
+
+    with row1_col1:
+        st.subheader("1. Monthly Job Posting Volume (Segmented)")
+        st.markdown("Monthly volume breakdown highlighting entry-level roles versus other position levels.")
+        
+        macro_df = filtered_df.copy()
+        macro_df = macro_df.dropna(subset=['metadata_newPostingDate'])
+        macro_df['YearMonth'] = macro_df['metadata_newPostingDate'].dt.to_period('M').astype(str)
+        
+        # Categorize position level cleanly
+        macro_df['Level_Type'] = macro_df['positionLevels'].apply(
+            lambda x: 'Fresh / Entry Level' if x == 'Fresh/entry level' else 'Other Position Levels'
+        )
+        
+        monthly_grouped = macro_df.groupby(['YearMonth', 'Level_Type']).size().reset_index(name='Count')
+        
+        if not monthly_grouped.empty:
+            # Altair bar chart with distinct color for entry-level highlighting
+            stack_chart = alt.Chart(monthly_grouped).mark_bar().encode(
+                x=alt.X('YearMonth:N', title='Month', sort=alt.EncodingSortField(field="YearMonth", op="min", order="ascending")),
+                y=alt.Y('Count:Q', title='Job Postings Count'),
+                color=alt.Color('Level_Type:N', title='Position Level',
+                                scale=alt.Scale(domain=['Fresh / Entry Level', 'Other Position Levels'],
+                                              range=['#ff7f0e', '#aec7e8'])),
+                tooltip=['YearMonth', 'Level_Type', 'Count']
+            ).properties(height=300)
+            
+            st.altair_chart(stack_chart, use_container_width=True)
+        else:
+            st.info("No monthly data available.")
+        
+        # --- Commentary / Findings for Chart 1 with the average percentage included ---
+        st.info(
+            f"📌 **Key Finding (Volume & Velocity):** "
+            f"Fresh/entry-level positions track alongside overall market volumes. "
+            f"**Percentage of entry level jobs {avg_entry_pct:.1f}%**. "
+            f"Highlighting entry-level roles against broader market postings shows their relative share over time."
+        )
+
+    with row1_col2:
+        st.subheader("2. Entry-Level Job Status Breakdown")
+        st.markdown("Proportion of status states for entry-level roles.")
+        
+        if 'status_jobStatus' in entry_df.columns:
+            status_counts = entry_df['status_jobStatus'].value_counts()
+            total_status_count = status_counts.sum()
+            
+            status_df = status_counts.reset_index()
+            status_df.columns = ['Job Status', 'Count']
+            status_df['Percentage (%)'] = (status_df['Count'] / total_status_count * 100).round(1)
+            
+            pie_chart = alt.Chart(status_df).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Count", type="quantitative"),
+                color=alt.Color(field="Job Status", type="nominal"),
+                tooltip=['Job Status', 'Count', 'Percentage (%)']
+            ).properties(height=300)
+            
+            st.altair_chart(pie_chart, use_container_width=True)
+            
+            pct_dict = dict(zip(status_df['Job Status'], status_df['Percentage (%)']))
+            open_pct = pct_dict.get('Open', pct_dict.get('open', 0.0))
+            reopen_pct = pct_dict.get('Reopen', pct_dict.get('reopen', pct_dict.get('Re-open', 0.0)))
+            closed_pct = pct_dict.get('Closed', pct_dict.get('closed', 0.0))
+            
+            st.info(
+                f"📌 **Key Finding (Market Urgency):** "
+                f"The job status distribution shows **Open jobs: {open_pct}%**, "
+                f"**Reopen jobs: {reopen_pct}%**, and **Closed jobs: {closed_pct}%**. "
+                f"This balance reflects overall hiring urgency and market liquidity for new entrants."
+            )
+        else:
+            st.info("Job status column not found.")
+
+else:
+    st.info("No data available for the selected filters.")
+
+###################################################
+## RAW / FILTERED RESULTS VIEW
 ################################################### 
+st.markdown("---")
+st.header("Filtered Results Data View (Entry-Level Focus)")
+st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
+st.dataframe(entry_df, use_container_width=True)
