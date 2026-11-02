@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime
 import json
 import altair as alt
+import math
+import plotly.express as px
 
 st.set_page_config(page_title="Sector Demand for Entry Level Workers", layout="wide")
 
@@ -18,9 +20,9 @@ def load_data(path):
     df = df.dropna(axis = 1, how = 'all')               # drop the empty column
     remove_row = (df.isna() | df.eq(0)).all(axis=1)     # drop the empty rows (all NaN or 0)
     df = df.loc[~remove_row]                            # drop the empty rows (all NaN or 0)
-    df['metadata_expiryDate'] = pd.to_datetime(df['metadata_expiryDate'])
-    df['metadata_newPostingDate'] = pd.to_datetime(df['metadata_newPostingDate'])
-    df['metadata_originalPostingDate'] = pd.to_datetime(df['metadata_originalPostingDate'])
+    df['metadata_expiryDate'] = pd.to_datetime(df['metadata_expiryDate'], format = '%Y-%m-%d')
+    df['metadata_newPostingDate'] = pd.to_datetime(df['metadata_newPostingDate'], format = '%Y-%m-%d')
+    df['metadata_originalPostingDate'] = pd.to_datetime(df['metadata_originalPostingDate'], format = '%Y-%m-%d')
     df['employmentTypes'] = df['employmentTypes'].astype('category')
     df['positionLevels'] = df['positionLevels'].astype('category')
 
@@ -229,23 +231,9 @@ if not filtered_df.empty:
 else:
     st.info("No data available for the selected filters.")
 
-###################################################
-## RAW / FILTERED RESULTS VIEW
-################################################### 
-st.markdown("---")
-st.header("Filtered Results Data View (Entry-Level Focus)")
-st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
-st.dataframe(entry_df, use_container_width=True)
-
-
-
-
 ################################################### 
 ## PHASE 2: SECTOR DEMAND & SALARY ANALYSIS
 ################################################### 
-
-import math
-import plotly.express as px
 
 SHORT = {"Banking and Finance": "Banking & Finance", "Building and Construction": "Building & Constr.",
          "Education and Training": "Education", "Information Technology": "IT",
@@ -342,3 +330,13 @@ else:
         f"The most crowded is **{crowded['sector']}** with {crowded['applicants_per_job']:.2f} applicants per job."
     )
     st.caption("Median average salary is calculated after removing outliers (top and bottom 1% of salaries for each sector). ")
+
+
+###################################################
+## RAW / FILTERED RESULTS VIEW
+################################################### 
+st.markdown("---")
+st.header("Filtered Results Data View (Entry-Level Focus)")
+st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
+st.dataframe(entry_df, use_container_width=True)
+
