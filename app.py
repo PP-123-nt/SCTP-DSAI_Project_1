@@ -342,3 +342,143 @@ else:
         f"The most crowded is **{crowded['sector']}** with {crowded['applicants_per_job']:.2f} applicants per job."
     )
     st.caption("Median average salary is calculated after removing outliers (top and bottom 1% of salaries for each sector). ")
+
+
+
+### Re-Open Anaysis ###
+
+AGENCY_PAT = r"recruit|hr advisory|manpower|staffing|talent|headhunt|persol|adecco|randstad|hays|michael page|robert walters|employment|personnel|executive search"
+
+st.markdown("---")
+st.header("Re-open drill-down: is it driven by a sector or a company?")
+
+ro_df = entry_all.assign(
+    company=entry_all["postedCompany_name"].fillna("Unknown").str.strip().str.title(),
+    is_reopen=entry_all["status_jobStatus"].eq("Re-open"))
+ro_df["is_agency"] = ro_df["company"].str.contains(AGENCY_PAT, case=False, regex=True)
+
+all_n, all_r = len(ro_df), int(ro_df["is_reopen"].sum())
+all_rate = all_r / all_n * 100
+sec = ro_df.groupby("sector").agg(postings=("is_reopen", "size"), reopen=("is_reopen", "sum")).reset_index()
+sec["rate"] = sec["reopen"] / sec["postings"] * 100
+sec["share"] = sec["reopen"] / all_r * 100
+
+# A click on a bar in chart 1 is stored under chart_key and wins over the dropdown.
+st.session_state.setdefault("reset_n", 0)
+chart_key = f"sector_chart_{st.session_state['reset_n']}"     # a new key = a fresh chart with no selection
+picked = None
+_sel = st.session_state.get(chart_key)
+if _sel:
+    _pts = _sel.get("selection", {}).get("sector_pick", [])
+    picked = _pts[0].get("sector") if _pts else None
+
+d1, d2, d3 = st.columns(3)
+with d1:
+    dropdown = st.selectbox("Drill into a sector (or click a bar in chart 1)",
+                            ["All sectors"] + list(sec.sort_values("reopen", ascending=False)["sector"]))
+drill = picked or dropdown
+with d2:
+    metric = st.radio("Show", ["Re-open postings (count)", "Re-open rate (% of postings)"], horizontal=True)
+rate_view = metric.startswith("Re-open rate")
+with d3:
+    min_n = st.select_slider("Minimum postings for the rate view", options=[20, 50, 100, 250, 500], value=100) if rate_view else 0
+value_col = "rate" if rate_view else "reopen"
+fmt, x_title = (".1f", "Re-open rate (% of postings)") if rate_view else (",.0f", "Re-open postings")
+if picked:
+    m1, m2 = st.columns([4, 1])
+    m1.caption(f"Selected by clicking chart 1: **{picked}**. Press Clear selection to go back to all sectors.")
+    if m2.button("✖ Clear selection"):
+        st.session_state["reset_n"] += 1
+        st.rerun()
+if rate_view:
+    st.caption(f"Rate view: only sectors and companies with at least {min_n} postings are shown, so tiny samples cannot reach 100%.")
+
+scope = ro_df if drill == "All sectors" else ro_df[ro_df["sector"] == drill]
+scope_name = "all sectors" if drill == "All sectors" else drill
+s_n, s_r = len(scope), int(scope["is_reopen"].sum())
+comp = (scope.groupby("company")
+             .agg(postings=("is_reopen", "size"), reopen=("is_reopen", "sum"), agency=("is_agency", "first"))
+             .reset_index())
+comp["rate"] = comp["reopen"] / comp["postings"] * 100
+comp["share"] = comp["reopen"] / s_r * 100 if s_r else 0
+
+if s_r == 0:
+    st.info(f"No re-open postings in {scope_name}.")
+else:
+    top = comp.sort_values("reopen", ascending=False).iloc[0]
+    top_share, top10_share = top["reopen"] / s_r * 100, comp.nlargest(10, "reopen")["reopen"].sum() / s_r * 100
+    rate_ex = (s_r - top["reopen"]) / (s_n - top["postings"]) * 100 if s_n > top["postings"] else 0.0
+    scope_rate = s_r / s_n * 100
+
+    k = st.columns(5)
+    k[0].metric("Postings", f"{s_n:,}")
+    k[1].metric("Re-open postings", f"{s_r:,}")
+    k[2].metric("Re-open rate", f"{scope_rate:.1f}%", f"{scope_rate / all_rate:.1f}x overall" if drill != "All sectors" else None, delta_color="off")
+    k[3].metric("Top company's share", f"{top_share:.0f}%", top["company"], delta_color="off")
+    k[4].metric("Top 10 companies' share", f"{top10_share:.0f}%")
+
+    left, right = st.columns(2)
+    with left:
+        st.subheader("1. Which sectors re-open the most?")
+        st.caption("Click a bar to drill into that sector. Orange = selected. Share = share of all re-open postings.")
+        ld = sec[(sec["postings"] >= min_n) & (sec["reopen"] > 0)].nlargest(15, value_col).copy()
+        if ld.empty:
+            st.info("No sector meets the minimum postings filter.")
+        else:
+            ld["label"] = [f"{n}  ({v:.1f}%)" if rate_view else f"{n}  ({int(v):,})" for n, v in zip(ld["sector"], ld[value_col])]
+            pick = alt.selection_point(name="sector_pick", fields=["sector"], empty=False)
+            chart1 = (alt.Chart(ld).mark_bar().add_params(pick).encode(
+                y=alt.Y("label:N", sort="-x", title=None, axis=alt.Axis(labelLimit=300, labelOverlap=False)),
+                x=alt.X(f"{value_col}:Q", title=x_title),
+                color=alt.condition(pick, alt.value("#e76f51"), alt.value("#2a9d8f")),
+                tooltip=[alt.Tooltip("sector:N"), alt.Tooltip("postings:Q", format=","),
+                         alt.Tooltip("reopen:Q", format=",", title="Re-open postings"),
+                         alt.Tooltip("rate:Q", format=".1f", title="Re-open rate (%)"),
+                         alt.Tooltip("share:Q", format=".1f", title="Share of all re-open (%)")])
+                      .properties(height=max(150, 28 * len(ld))))
+            try:
+                st.altair_chart(chart1, use_container_width=True, on_select="rerun", key=chart_key)
+            except TypeError:          # Streamlit older than 1.35 has no chart selections: use the dropdown instead
+                st.altair_chart(chart1, use_container_width=True)
+                st.caption("This Streamlit version cannot read clicks. Use the dropdown above.")
+    with right:
+        st.subheader(f"2. Which companies drive re-open in {scope_name}?")
+        st.caption("Dark = recruitment agency (matched by company name). Share = share of re-open postings in the selected scope.")
+        rd = comp[(comp["postings"] >= min_n) & (comp["reopen"] > 0)].nlargest(15, value_col).copy()
+        rd["type"] = ["Recruitment agency" if a else "Other employer" for a in rd["agency"]]
+        if rd.empty:
+            st.info("No company meets the minimum postings filter. Lower it to see smaller companies.")
+        else:
+            base = alt.Chart(rd).encode(y=alt.Y("company:N", sort="-x", title=None, axis=alt.Axis(labelLimit=260, labelOverlap=False)),
+                                        x=alt.X(f"{value_col}:Q", title=x_title))
+            bars = base.mark_bar().encode(
+                color=alt.Color("type:N", scale=alt.Scale(domain=["Recruitment agency", "Other employer"], range=["#264653", "#2a9d8f"]),
+                                legend=alt.Legend(orient="bottom", title=None, labelLimit=300)),
+                tooltip=[alt.Tooltip("company:N"), alt.Tooltip("postings:Q", format=","),
+                         alt.Tooltip("reopen:Q", format=",", title="Re-open postings"),
+                         alt.Tooltip("rate:Q", format=".1f", title="Re-open rate (%)"),
+                         alt.Tooltip("share:Q", format=".1f", title="Share of re-open here (%)")])
+            st.altair_chart((bars + base.mark_text(align="left", dx=4).encode(text=alt.Text(f"{value_col}:Q", format=fmt)))
+                            .properties(height=max(150, 28 * len(rd))), use_container_width=True)
+
+    driver = "driven mainly by one company" if top_share >= 25 else "spread across many companies"
+    st.info(
+        f"📌 **Key Finding (Re-open drivers):** In {scope_name}, {s_r:,} of {s_n:,} postings are re-open ({scope_rate:.1f}%"
+        + (f", {scope_rate / all_rate:.1f}x the overall {all_rate:.1f}%" if drill != "All sectors" else "") + "). "
+        f"The top company, **{top['company']}**, accounts for **{top_share:.0f}%** of them (on {top['postings'] / s_n * 100:.1f}% of postings); "
+        f"the top 10 companies account for {top10_share:.0f}%. Without {top['company']} the re-open rate would be {rate_ex:.1f}%. "
+        f"Re-open here is therefore **{driver}**."
+    )
+    with st.expander("See the tables", expanded=drill != "All sectors"):
+        t1, t2 = st.columns(2)
+        sec_view = sec if drill == "All sectors" else sec[sec["sector"] == drill]     # selected sector only
+        t1.dataframe(sec_view.sort_values("reopen", ascending=False).rename(columns={
+            "sector": "Sector", "postings": "Postings", "reopen": "Re-open", "rate": "Re-open rate (%)", "share": "Share of all re-open (%)"}),
+            hide_index=True, use_container_width=True,
+            column_config={"Re-open rate (%)": st.column_config.NumberColumn(format="%.1f"),
+                           "Share of all re-open (%)": st.column_config.NumberColumn(format="%.1f")})
+        t2.dataframe(comp.sort_values("reopen", ascending=False).head(50).drop(columns="agency").rename(columns={
+            "company": "Company", "postings": "Postings", "reopen": "Re-open", "rate": "Re-open rate (%)", "share": "Share of re-open here (%)"}),
+            hide_index=True, use_container_width=True,
+            column_config={"Re-open rate (%)": st.column_config.NumberColumn(format="%.1f"),
+                           "Share of re-open here (%)": st.column_config.NumberColumn(format="%.1f")})
