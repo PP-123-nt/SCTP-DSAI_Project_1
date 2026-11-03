@@ -569,7 +569,7 @@ else:
     k = st.columns(5)
     k[0].metric("Postings", f"{s_n:,}")
     k[1].metric("Re-Open Postings", f"{s_r:,}")
-    k[2].metric("Re-Open Rate", f"{scope_rate:.1f}%", f"{scope_rate / all_rate:.1f}x overall" if (sector_filter or company_filter) and all_rate else None, delta_color="off")
+    k[2].metric("Re-Open Rate", f"{scope_rate:.1f}%", f"{scope_rate / all_rate:.1f}x overall at {all_rate:.1f}%" if (sector_filter or company_filter) and all_rate else None, delta_color="off")
 
     if company_filter:
         k[3].metric("Sectors covered", f"{scope['sector'].nunique():,}")
