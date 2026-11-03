@@ -356,7 +356,7 @@ else:
 AGENCY_PAT = r"recruit|hr advisory|manpower|staffing|talent|headhunt|persol|adecco|randstad|hays|michael page|robert walters|employment|personnel|executive search"
 
 st.markdown("---")
-st.header("Re-open drill-down: is it driven by a sector or a company?")
+st.header("Re-Open Drill-down: Driven by A Sector or A Company?")
 
 
 # ============================================================
@@ -443,11 +443,11 @@ with f2:
     dropdown = st.selectbox("Sector (pick here or click chart 1)", sector_options, key="ro_dropdown", on_change=on_sector_dropdown_change)
 
 with f3:
-    metric = st.radio("Show", ["Re-open postings (count)", "Re-open rate (% of postings)"], horizontal=True, key="ro_metric")
+    metric = st.radio("Show", ["Re-Open Postings (Count)", "Re-Open Rate (% of Postings)"], horizontal=True, key="ro_metric")
 
-rate_view = metric.startswith("Re-open rate")
+rate_view = metric.startswith("Re-Open Rate")
 value_col = "rate" if rate_view else "reopen"
-x_title = "Re-open rate (% of postings)" if rate_view else "Re-open postings"
+x_title = "Re-Open Rate (% of Postings)" if rate_view else "Re-Open Postings"
 
 sector_filter = None if dropdown == "All sectors" else dropdown
 
@@ -568,8 +568,8 @@ else:
 
     k = st.columns(5)
     k[0].metric("Postings", f"{s_n:,}")
-    k[1].metric("Re-open postings", f"{s_r:,}")
-    k[2].metric("Re-open rate", f"{scope_rate:.1f}%", f"{scope_rate / all_rate:.1f}x overall" if (sector_filter or company_filter) and all_rate else None, delta_color="off")
+    k[1].metric("Re-Open Postings", f"{s_r:,}")
+    k[2].metric("Re-Open Rate", f"{scope_rate:.1f}%", f"{scope_rate / all_rate:.1f}x overall" if (sector_filter or company_filter) and all_rate else None, delta_color="off")
 
     if company_filter:
         k[3].metric("Sectors covered", f"{scope['sector'].nunique():,}")
@@ -579,8 +579,8 @@ else:
         top = comp_by_count.iloc[0]
         top_share = top["reopen"] / s_r * 100 if s_r else 0
         top10_share = comp_by_count.head(10)["reopen"].sum() / s_r * 100 if s_r else 0
-        k[3].metric("Top company's share", f"{top_share:.0f}%", top["company"], delta_color="off")
-        k[4].metric("Top 10 companies' share", f"{top10_share:.0f}%")
+        k[3].metric("Top Company's Share", f"{top_share:.0f}%", top["company"], delta_color="off")
+        k[4].metric("Top 10 Companies' Share", f"{top10_share:.0f}%")
 
 
     # ========================================================
@@ -595,7 +595,7 @@ else:
 
     with left:
 
-        st.subheader("1. Which sectors re-open the most?" + (f" ({company_filter})" if company_filter else ""))
+        st.subheader("1. Which Sectors Re-Open the Most?" + (f" ({company_filter})" if company_filter else ""))
         st.caption("Click a bar to drill into that sector. Click the empty chart background to reset. Share = share of re-open postings in this chart.")
 
         ld = top_rows(sec, "sector")
@@ -633,7 +633,7 @@ else:
 
     with right:
 
-        st.subheader(f"2. Which companies drive re-open in {sector_filter or 'all sectors'}?")
+        st.subheader(f"2. Which Companies Drive Re-Open in {sector_filter or 'All Sectors'}?")
         st.caption("Click a bar to drill into that company. Click the empty chart background to clear the company. Orange = selected; dark blue = potential recruitment agency.")
 
         if company_filter:
