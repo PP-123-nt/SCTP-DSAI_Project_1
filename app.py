@@ -81,8 +81,16 @@ def load_data(path):
 
 df = load_data(DATA_PATH)
 
-st.title("Sector Demand for Entry Level Workers")
+st.title("Sector Demand for Entry-Level Workers")
 #st.dataframe(df.head(10))
+
+# Business case and objective of the dashboard. We can either list here or verbalise it during the presentation.
+st.write(
+    "As government policymakers, we aim to use this dashboard to identify "
+    "sectors with strong entry-level hiring demand, better advertised "
+    "pay and more stable employment opportunities, informing decisions on "
+    "training provision, employment support and employer partnerships."
+)
 
 ###################################################
 ## ADD SIDEBAR WIDGETS HERE VVVVVVVV
@@ -141,19 +149,22 @@ if not filtered_df.empty:
     avg_entry_pct = (entry_jobs_count / total_jobs_count * 100) if total_jobs_count > 0 else 0.0
 
     # Quick Summary Metrics (Strictly Entry-Level)
-    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     with col_m1:
         st.metric("Total Entry-Level Postings", f"{entry_jobs_count:,}")
     with col_m2:
-        total_apps = entry_df['metadata_totalNumberJobApplication'].sum() if 'metadata_totalNumberJobApplication' in entry_df.columns else 0
-        st.metric("Total Entry-Level Applications", f"{int(total_apps):,}")
+        entry_share = (entry_jobs_count / len(filtered_df) * 100 if len(filtered_df) > 0 else 0)
+        st.metric("Entry-Level Share of Postings", f"{entry_share:.1f}%")
     with col_m3:
-        unique_companies = entry_df['postedCompany_name'].nunique() if 'postedCompany_name' in entry_df.columns else 0
-        st.metric("Hiring Companies (Entry-Level)", f"{unique_companies:,}")
-
+        unique_categories = (entry_df["categories"].dropna().apply(lambda value: [item["category"] for item in json.loads(value)]).explode().nunique())
+        st.metric("Sectors with Entry-Level Postings",f"{unique_categories:,}")
+    with col_m4:
+        median_salary = entry_df["average_salary"].median()
+        st.metric("Median Entry-Level Salary",f"S${median_salary:,.0f}")
     st.markdown("---")
 
-    # --- ROW 1: SEGMENTED HISTOGRAM & JOB STATUS PIE CHART BESIDE IT ---
+
+        # --- ROW 1: SEGMENTED HISTOGRAM & JOB STATUS PIE CHART BESIDE IT ---
     row1_col1, row1_col2 = st.columns(2)
 
     with row1_col1:
