@@ -16,7 +16,7 @@ import altair as alt
 import plotly.express as px
 
 
-st.set_page_config(page_title="Sector Demand for Entry Level Workers", layout="wide")
+st.set_page_config(page_title="Sector Demand for Entry Level Workers - TEST", layout="wide")
 print(f"🟢 Rerun at: {datetime.now()}")
 
 DATA_PATH = "SGJobData.csv"
@@ -53,7 +53,7 @@ df = load_data(DATA_PATH, DATA_MTIME)
 # 2. SIDEBAR FILTERS AND CATEGORY EXTRACTION
 # ============================================================
 
-st.title("Sector Demand for Entry Level Workers")
+st.title("Sector Demand for Entry Level Workers - TEST")
 st.sidebar.header("Filters")
 
 
