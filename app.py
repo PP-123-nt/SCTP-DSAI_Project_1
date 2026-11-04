@@ -1009,3 +1009,110 @@ else:
 
 
 
+
+
+# ============================================================
+## Bubble with re-open rate as size  ##
+# ============================================================
+
+
+
+RB_SHORT = {"Banking and Finance": "Banking & Finance", "Building and Construction": "Building & Constr.",
+            "Education and Training": "Education", "Information Technology": "IT",
+            "Accounting / Auditing / Taxation": "Accounting", "Admin / Secretarial": "Admin",
+            "Customer Service": "Customer service", "Sales / Retail": "Sales/Retail", "Human Resources": "HR",
+            "Advertising / Media": "Advertising", "Healthcare / Pharmaceutical": "Healthcare"}
+RB_ORANGE, RB_TEAL = "#e76f51", "#2a9d8f"
+RB_HARD = "Hard to Fill: higher pay with more re-opened postings than the median of the sectors shown"
+
+
+def is_reopen_series(d):
+    """True/False per posting: is its status Re-open? Looks for the status column in d, then in the loaded data (df)."""
+    def norm(s):
+        return s.astype(str).str.lower().str.replace(r"[\s\-_]", "", regex=True).eq("reopen")
+    for col in ("status_jobStatus", "status", "jobStatus", "job_status"):
+        if col in d.columns:
+            return norm(d[col])
+    src = globals().get("df")                                    # fall back to the loaded data, matched on the job id
+    if src is not None and "status_jobStatus" in src.columns and "metadata_jobPostId" in d.columns:
+        lookup = src.drop_duplicates("metadata_jobPostId").set_index("metadata_jobPostId")["status_jobStatus"]
+        return norm(d["metadata_jobPostId"].map(lookup))
+    return None
+
+
+def reopen_bubble_figure(s):
+    """s = top sectors with columns: sector, postings, median_salary, reopen_pct"""
+    s = s.copy()
+    mx, my = s["reopen_pct"].median(), s["median_salary"].median()
+    s["group"] = ((s["reopen_pct"] >= mx) & (s["median_salary"] >= my)).map({True: RB_HARD, False: "Other sector"})
+    s["label"] = s["sector"].map(lambda n: RB_SHORT.get(n, n))
+    xmax = max(1.0, math.ceil(s["reopen_pct"].max() * 1.25 * 2) / 2)
+    ymin = math.floor((s["median_salary"].min() - 250) / 250) * 250
+    ymax = math.ceil((s["median_salary"].max() + 250) / 250) * 250
+
+    fig = px.scatter(s, x="reopen_pct", y="median_salary", size="postings", text="label", color="group",
+                     custom_data=["sector", "postings"], size_max=40,
+                     color_discrete_map={RB_HARD: RB_ORANGE, "Other sector": RB_TEAL},
+                     category_orders={"group": [RB_HARD, "Other sector"]})
+    for t in fig.data:
+        hard = t.name == RB_HARD
+        t.update(marker=dict(opacity=0.85 if hard else 0.5, line=dict(width=1.5, color=RB_ORANGE if hard else RB_TEAL)),
+                 textposition=["middle left" if x > 0.85 * xmax else "middle right" for x in t.x],
+                 textfont=dict(size=11),
+                 hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:,} postings<br>"
+                               "Median cleaned salary S$%{y:,.0f} a month<br>"
+                               "%{x:.1f}% of postings re-opened<extra></extra>")
+
+    fig.add_shape(type="rect", x0=mx, x1=xmax, y0=my, y1=ymax, fillcolor="rgba(231,111,81,0.10)", line_width=0, layer="below")
+    fig.add_vline(x=mx, line_dash="dash", line_color="grey", line_width=1)
+    fig.add_hline(y=my, line_dash="dash", line_color="grey", line_width=1)
+    fig.add_annotation(x=0.98 * xmax, y=ymax, text="More re-opened postings with higher pay", showarrow=False,
+                       xanchor="right", yanchor="top", font=dict(size=12))
+    grid = "rgba(128,128,128,0.15)"
+    fig.update_xaxes(range=[0, xmax], gridcolor=grid, zeroline=False, ticksuffix="%",
+                     title="Re-open Rate (% of postings with status Re-open)")
+    fig.update_yaxes(range=[ymin, ymax], gridcolor=grid, zeroline=False, tickprefix="S$", tickformat=",",
+                     title="Median Average Salary (S$ per month)")
+    fig.update_layout(height=520, margin=dict(l=0, r=0, t=50, b=0),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, title_text=""))
+    return fig
+
+
+st.subheader("Top 10 Sectors by Median Average Salary vs Re-open Rate")
+rb_emp = st.multiselect("Employment Type (this chart only)", sorted(entry_all["employmentTypes"].dropna().unique()),
+                        default=[], key="emp_reopen_bubble")
+rb_base = entry_all[entry_all["employmentTypes"].isin(rb_emp)] if rb_emp else entry_all
+rb_reopen = is_reopen_series(rb_base)
+
+if rb_reopen is None:
+    st.error("This chart needs the job status column (status_jobStatus), but it was not found. "
+             f"Columns available here: {list(rb_base.columns)}")
+else:
+    rb = (rb_base.assign(is_reopen=rb_reopen)
+          .groupby("sector")
+          .agg(postings=("sector", "size"),
+               median_salary=("average_salary_clean", "median"),
+               reopened=("is_reopen", "sum"))
+          .reset_index())
+    rb["reopen_pct"] = rb["reopened"] / rb["postings"] * 100
+    rb = rb[rb["postings"] > 1000].sort_values(["median_salary", "postings"], ascending=False).head(10)
+
+    if len(rb) < 3:
+        st.info(f"Only {len(rb)} sector(s) have more than 1,000 postings for this selection, too few to compare.")
+    else:
+        st.caption(f"{int(rb['postings'].sum()):,} postings across the selected top sectors. "
+                   "Showing the top 10 sectors with > 1,000 postings ranked by median salary.")
+        st.plotly_chart(reopen_bubble_figure(rb), use_container_width=True)
+
+        mx, my = rb["reopen_pct"].median(), rb["median_salary"].median()
+        hard = rb[(rb["reopen_pct"] >= mx) & (rb["median_salary"] >= my)]
+        most = rb.iloc[rb["reopen_pct"].argmax()]
+        least = rb.iloc[rb["reopen_pct"].argmin()]
+        st.info(
+            f"📌 **Key Finding (Pay vs Re-open):** Among these {len(rb)} sectors, **{most['sector']}** re-opens the most "
+            f"({most['reopen_pct']:.1f}% of postings) and **{least['sector']}** the least ({least['reopen_pct']:.1f}%). "
+            f"**Hard to fill** (higher pay and more re-opened postings than the median shown): "
+            f"**{', '.join(hard['sector']) if len(hard) else 'none in this selection'}**."
+        )
+        st.caption("Re-open means the posting was reopened after closing. It can signal a hard-to-fill role, but a few companies "
+                   "can drive it (see the re-open drill-down), so check the companies before drawing conclusions.")
