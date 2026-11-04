@@ -150,16 +150,16 @@ if not filtered_df.empty:
     # Quick Summary Metrics (Strictly Entry-Level)
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     with col_m1:
-        st.metric("Total Entry-Level Postings", f"{entry_jobs_count:,}")
+        st.metric("Total Postings", f"{entry_jobs_count:,}")
     with col_m2:
         entry_share = (entry_jobs_count / len(filtered_df) * 100 if len(filtered_df) > 0 else 0)
-        st.metric("Entry-Level Share of Postings", f"{entry_share:.1f}%")
+        st.metric("Share of Postings", f"{entry_share:.1f}%")
     with col_m3:
         unique_categories = (entry_df["categories"].dropna().apply(lambda value: [item["category"] for item in json.loads(value)]).explode().nunique())
-        st.metric("Sectors with Entry-Level Postings",f"{unique_categories:,}")
+        st.metric("Sectors with Postings",f"{unique_categories:,}")
     with col_m4:
         median_salary = entry_df["average_salary"].median()
-        st.metric("Median Entry-Level Salary",f"S${median_salary:,.0f}")
+        st.metric("Median Average Salary",f"S${median_salary:,.0f}")
     st.markdown("---")
 
 
@@ -242,10 +242,305 @@ else:
     st.info("No data available for the selected filters.")
 
 
+st.subheader("3. Entry-Level Employment Types by Sector")
+
+st.markdown(
+    "Employment types across sectors with the most entry-level "
+    "postings, ranked by permanent employment share."
+)
+
+# 1. Create a separate dataset for this chart
+chart3_df = filtered_df.copy()
+
+chart3_df["Chart Posting Date"] = pd.to_datetime(
+    chart3_df["metadata_newPostingDate"],
+    errors="coerce"
+).dt.normalize()
+
+valid_dates = chart3_df["Chart Posting Date"].dropna()
+
+# 2. Select the number of sectors
+top_n = st.selectbox(
+    "Number of sectors shown",
+    options=[5, 10, 15],
+    index=1,
+    key="chart3_top_n"
+)
+
+# 3. Extract sectors from JSON categories
+def get_sector_names(value):
+    if pd.isna(value):
+        return []
+
+    return sorted({
+        item["category"].strip()
+        for item in json.loads(value)
+        if item.get("category")
+    })
 
 
+if valid_dates.empty:
+    st.info("No valid posting dates available for this chart.")
 
+else:
+    date_min = valid_dates.min().date()
+    date_max = valid_dates.max().date()
 
+    selected_dates = st.date_input(
+        "Posting Date Range — this chart only",
+        value=(date_min, date_max),
+        min_value=date_min,
+        max_value=date_max,
+        key="chart3_posting_dates"
+    )
+
+    if len(selected_dates) != 2:
+        st.info("Select both a start date and an end date.")
+
+    else:
+        start_date, end_date = selected_dates
+
+        # 4. Apply the date filter
+        chart3_df = chart3_df[
+            chart3_df["Chart Posting Date"].between(
+                pd.Timestamp(start_date),
+                pd.Timestamp(end_date)
+            )
+        ].copy()
+
+        # 5. Keep only Fresh/Entry Level postings
+        entry_jobs = chart3_df[
+            chart3_df["positionLevels"]
+            .str.strip()
+            .str.casefold()
+            .isin(["fresh/entry", "fresh/entry level"])
+        ].copy()
+
+        # 6. Prepare sectors and employment types
+        entry_jobs["Sector"] = entry_jobs["categories"].apply(
+            get_sector_names
+        )
+
+        entry_jobs["Employment Type"] = (
+            entry_jobs["employmentTypes"]
+            .astype("string")
+            .str.strip()
+            .fillna("Not specified")
+            .replace("", "Not specified")
+        )
+
+        # Keep Permanent and Full Time separate
+        label_map = {
+            "permanent": "Permanent",
+            "full time": "Full Time"
+        }
+
+        entry_jobs["Employment Type"] = (
+            entry_jobs["Employment Type"]
+            .apply(
+                lambda value: label_map.get(
+                    value.casefold(), value
+                )
+            )
+        )
+
+        # 7. Create one row per posting per sector
+        sector_jobs = (
+            entry_jobs.explode("Sector")
+            .dropna(subset=["Sector"])
+            .drop_duplicates(
+                subset=["metadata_jobPostId", "Sector"]
+            )
+        )
+
+        # 8. Count postings tagged Others
+        others_mask = (
+            sector_jobs["Sector"]
+            .str.casefold()
+            .eq("others")
+        )
+
+        others_count = sector_jobs.loc[
+            others_mask, "metadata_jobPostId"
+        ].nunique()
+
+        total_entry_postings = (
+            entry_jobs["metadata_jobPostId"].nunique()
+        )
+
+        others_share = (
+            others_count / total_entry_postings * 100
+            if total_entry_postings > 0 else 0
+        )
+
+        # Exclude Others from this chart only
+        named_sector_jobs = sector_jobs.loc[
+            ~others_mask
+        ].copy()
+
+        # 9. Select top sectors by posting count
+        top_sectors = (
+            named_sector_jobs["Sector"]
+            .value_counts()
+            .head(top_n)
+            .index
+            .tolist()
+        )
+
+        if not top_sectors:
+            st.info(
+                "No sectors available for the selected filters. "
+                "Try widening the date range."
+            )
+
+        else:
+            # 10. Count postings by sector and employment type
+            breakdown = (
+                named_sector_jobs[
+                    named_sector_jobs["Sector"].isin(top_sectors)
+                ]
+                .groupby(["Sector", "Employment Type"])
+                .size()
+                .reset_index(name="Postings")
+            )
+
+            breakdown["Total"] = (
+                breakdown.groupby("Sector")["Postings"]
+                .transform("sum")
+            )
+
+            breakdown["Share"] = (
+                breakdown["Postings"] / breakdown["Total"]
+            )
+
+            # 11. Sort sectors by Permanent share
+            permanent_share = (
+                breakdown[
+                    breakdown["Employment Type"] == "Permanent"
+                ]
+                .set_index("Sector")["Share"]
+                .reindex(top_sectors, fill_value=0)
+                .sort_values(
+                    ascending=False,
+                    kind="stable"
+                )
+            )
+
+            sector_order = permanent_share.index.tolist()
+
+            # 12. Put Permanent first, followed by Full Time
+            priority_types = ["Permanent", "Full Time"]
+
+            present_types = (
+                breakdown["Employment Type"].unique().tolist()
+            )
+
+            employment_order = [
+                label for label in priority_types
+                if label in present_types
+            ] + sorted(
+                label for label in present_types
+                if label not in priority_types
+            )
+
+            breakdown["Type Order"] = (
+                breakdown["Employment Type"]
+                .map({
+                    label: i
+                    for i, label in enumerate(employment_order)
+                })
+            )
+
+            # 13. Create the chart using Set2 colours
+            chart = alt.Chart(breakdown).mark_bar().encode(
+                y=alt.Y(
+                    "Sector:N",
+                    sort=sector_order,
+                    title="Sector"
+                ),
+                x=alt.X(
+                    "Share:Q",
+                    stack="zero",
+                    title="Share of Entry-Level Postings",
+                    axis=alt.Axis(format=".0%"),
+                    scale=alt.Scale(domain=[0, 1])
+                ),
+                color=alt.Color(
+                    "Employment Type:N",
+                    scale=alt.Scale(
+                        domain=employment_order,
+                        scheme="set2"
+                    ),
+                    title="Employment Type"
+                ),
+                order=alt.Order(
+                    "Type Order:Q",
+                    sort="ascending"
+                ),
+                tooltip=[
+                    alt.Tooltip("Sector:N"),
+                    alt.Tooltip("Employment Type:N"),
+                    alt.Tooltip("Postings:Q", format=","),
+                    alt.Tooltip("Share:Q", format=".1%"),
+                    alt.Tooltip(
+                        "Total:Q",
+                        title="Sector Postings",
+                        format=","
+                    )
+                ]
+            ).properties(
+                height=max(250, len(top_sectors) * 35)
+            )
+
+            st.altair_chart(
+                chart,
+                use_container_width=True
+            )
+
+            # 14. Findings update with the selected filters
+            highest_share = permanent_share.max()
+            lowest_share = permanent_share.min()
+
+            highest_sectors = ", ".join(
+                permanent_share[
+                    permanent_share == highest_share
+                ].index
+            )
+
+            lowest_sectors = ", ".join(
+                permanent_share[
+                    permanent_share == lowest_share
+                ].index
+            )
+
+            st.info(
+                f"📌 **Key Findings:** Among the "
+                f"{len(top_sectors)} sectors shown, "
+                f"the permanent posting share ranges from "
+                f"**{lowest_share:.1%}** to "
+                f"**{highest_share:.1%}**. "
+                f"Highest: **{highest_sectors}**. "
+                f"Lowest: **{lowest_sectors}**."
+            )
+
+            # 15. Chart notes
+            st.caption(
+                f"Showing {len(top_sectors)} of up to "
+                f"{top_n} sectors with the most entry-level "
+                "postings, ordered by permanent share."
+            )
+
+        st.caption(
+            f"'Others' is excluded from this sector ranking. "
+            f"{others_count:,} postings ({others_share:.1f}%) "
+            "carry this category within this chart's date "
+            "range and current sidebar filters. The exclusion "
+            "does not change overall dashboard metrics. "
+            "Jobs tagged with multiple sectors are "
+            "counted once in each sector."
+        )
+
+        
 ################################################### 
 ## PHASE 2: SECTOR DEMAND & SALARY ANALYSIS
 ################################################### 
@@ -311,7 +606,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 
 ## Bubble chart for top 10 sectors by cleaned median average salary
 
-st.subheader("Top 10 Sectors by Median Average Salary")
+st.subheader("4. Top 10 Sectors by Median Average Salary")
 chart_emp = st.multiselect("Employment Type (this chart only)",
                            sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
@@ -346,6 +641,31 @@ else:
     )
     st.caption("Median average salary is calculated after removing outliers (top and bottom 1% of salaries for each sector). ")
 
+## Policy Implications 
+st.subheader("Policy Implications")
+
+st.markdown("""
+- **Expand entry-level pathways:** Partner with employers on
+  structured onboarding and workplace training.
+- **Explore permanent employment pathways:** Engage sectors with
+  lower permanent shares to understand barriers and conversion options.
+- **Target training and job matching:** Investigate recruitment
+  barriers before deciding on courses or career outreach.
+""")
+
+with st.expander("View illustrative policy actions"):
+    st.markdown("""
+    - **Engineering:** Pilot paid entry-level roles with mentoring.
+    - **F&B:** Explore contract-to-permanent pathways where appropriate.
+    - **Construction:** Link short courses to verified vacancies
+      if employers confirm specific skills gaps.
+    """)
+
+st.caption(
+    "These are proposed actions for further assessment. "
+    "Job-posting data alone cannot establish skills shortages "
+    "or actual employment outcomes."
+)
 
 ###################################################
 ## RAW / FILTERED RESULTS VIEW
