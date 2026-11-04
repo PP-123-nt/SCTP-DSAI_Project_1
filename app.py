@@ -86,10 +86,9 @@ st.title("Sector Demand for Entry-Level Workers")
 
 # Business case and objective of the dashboard. We can either list here or verbalise it during the presentation.
 st.write(
-    "As government policymakers, we aim to use this dashboard to identify "
-    "sectors with strong entry-level hiring demand, better advertised "
-    "pay and more stable employment opportunities, informing decisions on "
-    "training provision, employment support and employer partnerships."
+    "As government policymakers, we use this dashboard to assess entry-level "
+    "hiring demand, advertised pay and employment stability across sectors "
+    "to guide training, employment support and employer partnerships."
 )
 
 ###################################################
@@ -241,6 +240,11 @@ if not filtered_df.empty:
 
 else:
     st.info("No data available for the selected filters.")
+
+
+
+
+
 
 ################################################### 
 ## PHASE 2: SECTOR DEMAND & SALARY ANALYSIS
