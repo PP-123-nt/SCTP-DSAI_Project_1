@@ -29,65 +29,69 @@ def load_data(path):
     # filters
     # df = df[df['positionLevels']=='Fresh/entry level'] 
     df = df[df['metadata_newPostingDate']>= '2023-05']
+    return df
 
+df = load_data(DATA_PATH)
+
+@st.cache_data
+def load_e_data():
+    e_df = df[df['positionLevels'] == 'Fresh/entry level'].copy()
     # replaces outlier 'average salary' values with the median for that sector ("category")
     # outliers are > or < 3 std from mean for each sector
     # THIS IS TEMP COMMENTED OUT TO REDUCE LOADING TIMES
     #############################################
-    # def category_names(value):
-    #     if isinstance(value, str):
-    #       value = json.loads(value)
-    #     return [item["category"] for item in value] if isinstance(value, list) else []
+    def category_names(value):
+        if isinstance(value, str):
+            value = json.loads(value)
+        return [item["category"] for item in value] if isinstance(value, list) else []
 
-    # category_salary = (
-    #     df.assign(category=df["categories"].map(category_names))
-    #     .explode("category")
-    #     .dropna(subset=["category", "average_salary"])
-    #     .groupby("category")["average_salary"]
-    #     .agg(mean="mean", median="median")
-    #     .sort_index()
-    # )
-    # category_rows = (
-    # df.assign(category=df["categories"].map(category_names))
-    #   .explode("category")
-    #   .dropna(subset=["category", "average_salary"])
-    # )
+    category_salary = (
+        e_df.assign(category=e_df["categories"].map(category_names))
+        .explode("category")
+        .dropna(subset=["category", "average_salary"])
+        .groupby("category")["average_salary"]
+        .agg(mean="mean", median="median")
+        .sort_index()
+    )
+    category_rows = (
+    e_df.assign(category=e_df["categories"].map(category_names))
+        .explode("category")
+        .dropna(subset=["category", "average_salary"])
+    )
 
-    # category_std = category_rows.groupby("category")["average_salary"].std()
-    # category_stats = category_salary.join(category_std.rename("std"))
+    category_std = category_rows.groupby("category")["average_salary"].std()
+    category_stats = category_salary.join(category_std.rename("std"))
 
-    # def replace_salary(row):
-    #     salary = row["average_salary"]
-    #     if pd.isna(salary):
-    #         return salary
+    def replace_salary(row):
+        salary = row["average_salary"]
+        if pd.isna(salary):
+            return salary
 
-    #     categories = list(dict.fromkeys(category_names(row["categories"])))
-    #     stats = category_stats.reindex(categories)
+        categories = list(dict.fromkeys(category_names(row["categories"])))
+        stats = category_stats.reindex(categories)
 
-    #     is_outlier = (
-    #         ((salary - stats["mean"]).abs() > 3 * stats["std"]) | (salary - stats["mean"]).abs() < 3 * stats["std"]
-    #     ).fillna(False).any()
+        is_outlier = (
+            ((salary - stats["mean"]).abs() > 3 * stats["std"]) | (salary - stats["mean"]).abs() < 3 * stats["std"]
+        ).fillna(False).any()
 
-    #     if is_outlier:
-    #         medians = category_salary.reindex(categories)["median"].dropna()
-    #         if not medians.empty:
-    #             return medians.mean()
+        if is_outlier:
+            medians = category_salary.reindex(categories)["median"].dropna()
+            if not medians.empty:
+                return medians.mean()
 
-    #     return salary
+        return salary
 
-    # df["average_salary"] = df.apply(replace_salary, axis=1)
+    e_df["average_salary"] = e_df.apply(replace_salary, axis=1)
+    return e_df
 
-    return df
-
-df = load_data(DATA_PATH)
-e_df = df[df['positionLevels'] == 'Fresh/entry level'].copy()
+e_df = load_e_data()
 
 st.title("Which Sectors Need More Workers?")
 #st.dataframe(df.head(10))
 
 # Business case and objective of the dashboard. We can either list here or verbalise it during the presentation.
 st.write(
-    "Scenario: As government policymakers, we want to identify sectors with high demand"
+    "**Scenario**: As government policymakers, we want to identify sectors with high demand"
     " for entry-level hires, which will inform training decisions, employment support and"
     " employer partnerships. Towards that end, this dashboard compares the volume of job"
     " postings and associated salary between different sectors."
@@ -369,9 +373,20 @@ named_sector_jobs = sector_jobs.loc[
 ].copy()
 
 # 9. Select top sectors by posting count
+sector_totals = named_sector_jobs.groupby("Sector").size()
+
+permanent_counts = (
+    named_sector_jobs.loc[
+        named_sector_jobs["Employment Type"] == "Permanent"
+    ]
+    .groupby("Sector")
+    .size()
+)
+
 top_sectors = (
-    named_sector_jobs["Sector"]
-    .value_counts()
+    permanent_counts.div(sector_totals)
+    .fillna(0)
+    .sort_values(ascending=False, kind="stable")
     .head(top_n)
     .index
     .tolist()
@@ -414,6 +429,7 @@ else:
             ascending=False,
             kind="stable"
         )
+        
     )
 
     sector_order = permanent_share.index.tolist()
@@ -532,7 +548,7 @@ st.caption(
 
 ##
 ###########################
-st.header("3. Salary for entry-level jobs vary between sectors")
+st.header("3. Entry-level salaries vary between sectors")
 
 def get_sectors(value):
     try:
@@ -595,6 +611,14 @@ chart = (floating_bars + average_points).properties(
 )
 
 st.altair_chart(chart, use_container_width=True)
+
+st.info(
+        f"📌 **Key Findings:** Salary data appears less reliable, due to job postings created"
+        f"with extreme salary ranges in order to boost visibilty."
+        f"After replacing outlier average salary values (exceeds sector mean +/- 3 std.) with "
+        f"sector medians, average entry-level salaries range from $3,450 to 2,262 per month."
+        f"Highest: **Insurance, Banking and Finance**. Lowest: **General Work, Advertising/Media**"
+    )
 
 st.markdown('---')        
 
@@ -697,6 +721,7 @@ else:
         f"The most crowded is **{crowded['sector']}** with {crowded['applicants_per_job']:.2f} applicants per job."
     )
     st.caption("Median average salary is calculated after removing outliers (top and bottom 1% of salaries for each sector). ")
+
 st.markdown('---')     
 
 ## Policy Implications 
