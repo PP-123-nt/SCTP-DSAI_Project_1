@@ -8,7 +8,7 @@ import altair as alt
 import math
 import plotly.express as px
 
-st.set_page_config(page_title="Sector Demand for Entry Level Workers", layout="wide")
+st.set_page_config(page_title="Which Sectors Need More Workers?", layout="wide")
 
 print(f"🟢 Rerun at: {datetime.now()}")
 
@@ -65,7 +65,7 @@ def load_data(path):
     #     stats = category_stats.reindex(categories)
 
     #     is_outlier = (
-    #         (salary > stats["mean"] + 3 * stats["std"]) | (salary < stats["mean"] - 3 * stats["std"])
+    #         ((salary - stats["mean"]).abs() > 3 * stats["std"]) | (salary - stats["mean"]).abs() < 3 * stats["std"]
     #     ).fillna(False).any()
 
     #     if is_outlier:
@@ -82,14 +82,15 @@ def load_data(path):
 df = load_data(DATA_PATH)
 e_df = df[df['positionLevels'] == 'Fresh/entry level'].copy()
 
-st.title("Sector Demand for Entry-Level Workers")
+st.title("Which Sectors Need More Workers?")
 #st.dataframe(df.head(10))
 
 # Business case and objective of the dashboard. We can either list here or verbalise it during the presentation.
 st.write(
-    "As government policymakers, we use this dashboard to assess entry-level "
-    "hiring demand, advertised pay and employment stability across sectors "
-    "to guide training, employment support and employer partnerships."
+    "Scenario: As government policymakers, we want to identify sectors with high demand"
+    " for entry-level hires, which will inform training decisions, employment support and"
+    " employer partnerships. Towards that end, this dashboard compares the volume of job"
+    " postings and associated salary between different sectors."
 )
 
 ###################################################
@@ -97,10 +98,7 @@ st.write(
 ###################################################
 
 st.markdown("---")
-st.header("1. Entry-level Job Openings: Overall and Sector Trends")
-
-## FILTER SIDEBAR AND DATA FILTERED BY SECTOR
-# 
+st.header("1. Volume of entry-level job postings is similar across months")
 
 def extract_categories(categories_str):
     if pd.isna(categories_str) or not isinstance(categories_str, str):
@@ -239,7 +237,7 @@ else:
 ###################################################
 ## Entry-Level Employment Types by Sector
 ###################################################
-st.header("2. Entry-Level Employment Types by Sector")
+st.header("2. Entry-level positions are predominantly permanent or full-time")
 
 st.markdown(
     "Employment types across sectors with the most entry-level "
@@ -534,7 +532,7 @@ st.caption(
 
 ##
 ###########################
-st.header("3. Salary by Sector")
+st.header("3. Salary for entry-level jobs vary between sectors")
 
 def get_sectors(value):
     try:
@@ -665,7 +663,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 
 ## Bubble chart for top 10 sectors by cleaned median average salary
 
-st.header("4. Top 10 Sectors by Median Average Salary")
+st.header("4. Entry-level postings associated with higher salary and fewer applicants")
 chart_emp = st.multiselect("Employment Type (this chart only)",
                            sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
@@ -734,4 +732,3 @@ st.caption(
 # st.header("Filtered Results Data View (Entry-Level Focus)")
 # st.write(f"Matching entry-level rows: {len(entry_df):,} | Columns: {len(entry_df.columns)}")
 # st.dataframe(entry_df, use_container_width=True)
-
