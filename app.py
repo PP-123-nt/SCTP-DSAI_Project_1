@@ -689,7 +689,7 @@ entry_all = add_sector_and_clean(df[df["positionLevels"] == "Fresh/entry level"]
 
 st.header("4. Entry-level postings associated with higher salary and fewer applicants")
 chart_emp = st.multiselect("Employment Type (this chart only)",
-                           sorted(entry_all["employmentTypes"].dropna().unique()), default=[])
+                           sorted(entry_all["employmentTypes"].dropna().unique()), default=["Permanent", "Full Time"])
 c = entry_all[entry_all["employmentTypes"].isin(chart_emp)] if chart_emp else entry_all
 
 s = (c.groupby("sector")
