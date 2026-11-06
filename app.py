@@ -616,7 +616,7 @@ st.info(
         f"📌 **Key Findings:** Salary data appears less reliable, due to job postings created"
         f"with extreme salary ranges in order to boost visibilty."
         f"After replacing outlier average salary values (exceeds sector mean +/- 3 std.) with "
-        f"sector medians, average entry-level salaries range from $3,450 to 2,262 per month."
+        f"sector medians, average entry-level salaries range from $3,450 to $2,262 per month."
         f"Highest: **Insurance, Banking and Finance**. Lowest: **General Work, Advertising/Media**"
     )
 
