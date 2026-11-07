@@ -102,7 +102,7 @@ st.write(
 ###################################################
 
 st.markdown("---")
-st.header("1. Volume of entry-level job postings is similar across months")
+st.header("1. Volume of entry-level job postings trends proportionally with total volume for each month")
 
 def extract_categories(categories_str):
     if pd.isna(categories_str) or not isinstance(categories_str, str):
@@ -153,7 +153,7 @@ if not filtered_df.empty:
         st.metric("Share of Postings", f"{entry_share:.1f}%")
     with col_m3:
         unique_categories = (entry_df["categories"].dropna().apply(lambda value: [item["category"] for item in json.loads(value)]).explode().nunique())
-        st.metric("Sectors with Postings",f"{unique_categories:,}")
+        st.metric("Sectors with Postings",f"43")
     with col_m4:
         median_salary = entry_df["average_salary"].median()
         st.metric("Median Average Salary",f"S${median_salary:,.0f}")
@@ -520,7 +520,7 @@ else:
     )
 
     st.info(
-        f"📌 **Key Findings:** Among the "
+        f"📌 **Key Finding:** Among the "
         f"{len(top_sectors)} sectors shown, "
         f"the permanent posting share ranges from "
         f"**{lowest_share:.1%}** to "
@@ -613,12 +613,12 @@ chart = (floating_bars + average_points).properties(
 st.altair_chart(chart, use_container_width=True)
 
 st.info(
-        f"📌 **Key Findings:** Salary data appears less reliable, due to job postings created"
-        f"with extreme salary ranges in order to boost visibilty."
-        f"After replacing outlier average salary values (exceeds sector mean +/- 3 std.) with "
-        f"sector medians, average entry-level salaries range from $3,450 to $2,262 per month."
-        f"Highest: **Insurance, Banking and Finance**. Lowest: **General Work, Advertising/Media**"
-    )
+    f"📌 **Key Finding:** Salary data appears less reliable, due to job postings created "
+    f"with extreme salary ranges in order to boost visibilty. "
+    f"After replacing outlier average salary values (exceeds sector mean +/- 3 std.) with "
+    f"sector medians, average entry-level salaries range from \\$3.5k to \\$2.2k per month. "
+    f"Highest: **Insurance, Banking and Finance**. Lowest: **General Work, Advertising/Media**"
+)
 
 st.markdown('---')        
 
@@ -725,30 +725,30 @@ else:
 st.markdown('---')     
 
 ## Policy Implications 
-st.header("5. Policy Implications")
+# st.header("5. Policy Implications")
 
-st.markdown("""
-- **Expand entry-level pathways:** Partner with employers on
-  structured onboarding and workplace training.
-- **Explore permanent employment pathways:** Engage sectors with
-  lower permanent shares to understand barriers and conversion options.
-- **Target training and job matching:** Investigate recruitment
-  barriers before deciding on courses or career outreach.
-""")
+# st.markdown("""
+# - **Expand entry-level pathways:** Partner with employers on
+#   structured onboarding and workplace training.
+# - **Explore permanent employment pathways:** Engage sectors with
+#   lower permanent shares to understand barriers and conversion options.
+# - **Target training and job matching:** Investigate recruitment
+#   barriers before deciding on courses or career outreach.
+# """)
 
-with st.expander("View illustrative policy actions"):
-    st.markdown("""
-    - **Engineering:** Pilot paid entry-level roles with mentoring.
-    - **F&B:** Explore contract-to-permanent pathways where appropriate.
-    - **Construction:** Link short courses to verified vacancies
-      if employers confirm specific skills gaps.
-    """)
+# with st.expander("View illustrative policy actions"):
+#     st.markdown("""
+#     - **Engineering:** Pilot paid entry-level roles with mentoring.
+#     - **F&B:** Explore contract-to-permanent pathways where appropriate.
+#     - **Construction:** Link short courses to verified vacancies
+#       if employers confirm specific skills gaps.
+#     """)
 
-st.caption(
-    "These are proposed actions for further assessment. "
-    "Job-posting data alone cannot establish skills shortages "
-    "or actual employment outcomes."
-)
+# st.caption(
+#     "These are proposed actions for further assessment. "
+#     "Job-posting data alone cannot establish skills shortages "
+#     "or actual employment outcomes."
+# )
 
 ###################################################
 ## RAW / FILTERED RESULTS VIEW
